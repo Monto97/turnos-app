@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.env
+*.env.local
+backup_pre_*.sql
+
+# Claude Code settings (local only)
+.claude/
+
+# Dev scratch files
+files/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,50 @@
+# ============================================================
+#  Entorno de desarrollo local - Sistema de turnos
+# ============================================================
+#  Levanta:
+#   - MySQL 8        (la base de datos)
+#   - phpMyAdmin     (interfaz web para ver/editar la base)
+#
+#  USO:
+#   docker compose up -d      -> levanta todo en segundo plano
+#   docker compose down       -> apaga todo (los datos persisten)
+#   docker compose down -v    -> apaga y BORRA los datos (reset limpio)
+#
+#  Una vez levantado:
+#   - MySQL disponible en:      localhost:3306
+#   - phpMyAdmin en el navegador: http://localhost:8080
+# ============================================================
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: turnos_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_dev   # cambiala si querés
+      MYSQL_DATABASE: turnos                    # crea la base automáticamente
+      MYSQL_USER: turnos_user
+      MYSQL_PASSWORD: turnos_pass_dev
+    ports:
+      - "3306:3306"
+    volumes:
+      # Persiste los datos entre reinicios:
+      - turnos_data:/var/lib/mysql
+      # Carga el esquema automáticamente la primera vez que arranca:
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    command: --default-authentication-plugin=mysql_native_password
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: turnos_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+
+volumes:
+  turnos_data:
