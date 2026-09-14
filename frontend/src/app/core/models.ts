@@ -6,7 +6,7 @@ export interface Usuario {
   apellido: string;
   email: string;
   telefono?: string;
-  rol?: 'dueño' | 'cliente' | 'profesional';
+  rol?: 'dueno' | 'cliente' | 'profesional';
   creado_en?: string;
 }
 

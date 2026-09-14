@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import { calcularSlotsLibres } from './disponibilidad.service.js';
+import { enviarNotificacionReserva } from './email.service.js';
 
 // ============================================================
 //  RESERVA PÚBLICA (lado del cliente, sin login)
@@ -95,6 +96,10 @@ export async function reservaPublica({
       throw new Error('Ese horario ya no está disponible');
     }
 
+    // Traemos el nombre del profesional para la notificación.
+    const [[profRow]] = await conn.query('SELECT nombre FROM profesionales WHERE id = ?', [profFinal]);
+    const nombreProfesional = profRow?.nombre || '';
+
     // Crear o reutilizar cliente.
     // Prioridad de identificación:
     //  1. Si hay usuario logueado, buscamos SU registro de cliente (usuario_id).
@@ -150,6 +155,15 @@ export async function reservaPublica({
     );
 
     await conn.commit();
+
+    // Notificación al dueño: fire-and-forget (no bloqueamos ni fallamos la reserva si el mail falla).
+    enviarNotificacionReserva({
+      servicio: serv.nombre,
+      profesional: nombreProfesional,
+      inicio,
+      cliente,
+    }).catch((e) => console.error('[email] Notificación de reserva falló:', e.message));
+
     return {
       turnoId: result.insertId,
       inicio, fin,

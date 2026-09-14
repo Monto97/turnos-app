@@ -15,10 +15,10 @@ export class AuthService {
   private _usuario = signal<Usuario | null>(this.leerUsuarioGuardado());
   usuario = this._usuario.asReadonly();
   estaLogueado = computed(() => this._usuario() !== null);
-  esDueno = computed(() => this._usuario()?.rol === 'dueño');
+  esDueno = computed(() => this._usuario()?.rol === 'dueno');
 
   rutaSegunRol(): string {
-    return this._usuario()?.rol === 'dueño' ? '/panel' : '/mis-turnos';
+    return this._usuario()?.rol === 'dueno' ? '/panel' : '/mis-turnos';
   }
 
   constructor(private http: HttpClient) {}

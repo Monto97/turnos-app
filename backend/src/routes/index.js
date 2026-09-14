@@ -15,7 +15,7 @@ const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 // TODAS las rutas de este router son del PANEL y requieren ser dueño.
 // Aplicamos los middlewares a nivel de router: primero autenticación
 // (¿quién sos?), después autorización (¿sos dueño?).
-router.use(requireAuth, requireRol('dueño'));
+router.use(requireAuth, requireRol('dueno'));
 
 // ---------- PROFESIONALES ----------
 router.get('/profesionales', wrap(async (req, res) => {

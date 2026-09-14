@@ -56,7 +56,7 @@ export async function registrar({ nombre, apellido, email, telefono, password, c
     if (codigoDueno !== CODIGO_DUENO) {
       throw new Error('El código de acceso de administrador no es válido');
     }
-    rol = 'dueño';
+    rol = 'dueno';
   }
 
   // ¿Ya existe ese email?

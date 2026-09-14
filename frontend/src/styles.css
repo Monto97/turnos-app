@@ -394,20 +394,37 @@ h1, h2, h3 {
 }
 .opcion-con-avatar { justify-content: flex-start; }
 
-/* Selector de fecha (chips de días) */
-.dias-scroll {
-  display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem;
-  margin-bottom: 1.2rem; scrollbar-width: thin;
+/* Calendario de mes (selector de fecha en reserva) */
+.cal-mes-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.75rem;
 }
-.dia-chip {
-  flex-shrink: 0; width: 60px; padding: 0.7rem 0; border-radius: var(--radius-sm);
-  border: 1.5px solid var(--line); background: var(--white); cursor: pointer;
-  text-align: center; transition: all 0.16s;
+.cal-mes-titulo {
+  font-family: 'Fraunces', serif; font-size: 1.05rem; font-weight: 600;
+  text-transform: capitalize; color: var(--ink);
 }
-.dia-chip.sel { border-color: var(--clay); background: var(--clay); color: var(--white); }
-.dia-chip .dia-nom { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
-.dia-chip .dia-num { font-size: 1.3rem; font-weight: 600; font-family: 'Fraunces', serif; }
-.dia-chip .dia-mes { font-size: 0.68rem; color: inherit; opacity: 0.7; }
+.cal-mes-semana {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 0.3rem;
+}
+.cal-mes-dia-nom {
+  text-align: center; font-size: 0.7rem; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: 0.04em; padding: 0.25rem 0;
+}
+.cal-mes-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  margin-bottom: 1.2rem;
+}
+.cal-mes-celda {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); border: 1.5px solid var(--line);
+  background: var(--white); cursor: pointer; font-size: 0.88rem; font-weight: 500;
+  transition: all 0.14s; user-select: none;
+}
+.cal-mes-celda:hover:not(.pasado) { border-color: var(--clay); }
+.cal-mes-celda.hoy { border-color: var(--olive); color: var(--olive); font-weight: 700; }
+.cal-mes-celda.sel { background: var(--clay); color: var(--white); border-color: var(--clay); }
+.cal-mes-celda.pasado { color: var(--line); border-color: transparent; cursor: default; background: transparent; }
 
 /* Grilla de horarios */
 .horarios-grid {
@@ -467,3 +484,33 @@ h1, h2, h3 {
   font-weight: 600; margin-top: 0.3rem;
 }
 .cargando-c { text-align: center; padding: 2rem; color: var(--ink-soft); }
+
+/* Separador y card especial de tocado personalizado */
+.consulta-sep {
+  text-align: center; font-size: 0.8rem; color: var(--ink-soft);
+  margin: 1rem 0 0.75rem; position: relative;
+}
+.consulta-sep::before, .consulta-sep::after {
+  content: ''; position: absolute; top: 50%; width: 30%; height: 1px; background: var(--line);
+}
+.consulta-sep::before { left: 0; }
+.consulta-sep::after { right: 0; }
+.opcion-personalizado { border-color: var(--olive); }
+.opcion-personalizado:hover { border-color: var(--olive); box-shadow: 0 0 0 3px rgba(111,114,86,0.12); }
+.op-precio-consulta {
+  font-family: 'Fraunces', serif; font-weight: 600; font-size: 0.95rem; color: var(--olive);
+}
+
+/* Card informativa del modo consulta */
+.card-info-consulta {
+  display: flex; gap: 0.9rem; align-items: flex-start;
+  background: #f0f1eb; border: 1px solid var(--olive);
+  border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 1.4rem;
+}
+.card-info-icon { font-size: 1.4rem; flex-shrink: 0; line-height: 1; margin-top: 0.1rem; }
+.card-info-titulo { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; }
+.card-info-texto { font-size: 0.88rem; color: var(--ink-soft); line-height: 1.4; }
+
+/* Botón de WhatsApp */
+.btn-whatsapp { background: #25D366; color: var(--white); }
+.btn-whatsapp:hover { background: #1ebe5a; box-shadow: var(--shadow-sm); }

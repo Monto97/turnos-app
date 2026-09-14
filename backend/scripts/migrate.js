@@ -66,7 +66,7 @@ async function migrate() {
 
     await conn.query(
       `INSERT INTO usuarios (nombre, apellido, email, telefono, password_hash, rol) VALUES
-       ('Admin', 'Demo', 'admin@studiobelle.com', '+54 11 9999-0000', ?, 'dueño'),
+       ('Admin', 'Demo', 'admin@studiobelle.com', '+54 11 9999-0000', ?, 'dueno'),
        ('Cliente', 'Demo', 'cliente@studiobelle.com', '+54 11 9999-0001', ?, 'cliente')`,
       [duenoHash, clienteHash]
     );

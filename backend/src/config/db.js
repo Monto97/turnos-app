@@ -31,7 +31,7 @@ export async function verificarConexion() {
     conn.release();
     console.log('✓ Conexión a MySQL OK');
   } catch (err) {
-    console.error('✗ Error conectando a MySQL:', err.message);
+    console.error('✗ Error conectando a MySQL:', err.message || err.code || err);
     throw err;
   }
 }

@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   telefono      VARCHAR(40),
   password_hash VARCHAR(255),
   google_id     VARCHAR(100),
-  rol           ENUM('cliente','dueño','profesional') NOT NULL DEFAULT 'cliente',
+  rol           ENUM('dueno','cliente','profesional') NOT NULL DEFAULT 'cliente',
   creado_en     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_email (email),
   UNIQUE KEY uq_google_id (google_id),

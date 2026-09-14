@@ -3,7 +3,9 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ReservaService, ResultadoReserva } from '../../core/reserva.service';
 import { Servicio, Profesional } from '../../core/dominio.models';
-import { DIAS, MESES, fechaISO, sumarDias, parseLocal } from '../panel/fecha.utils';
+import { DIAS, MESES, fechaISO, parseLocal } from '../panel/fecha.utils';
+
+const WA_JULI = '5492241689216';
 
 @Component({
   selector: 'app-reserva',
@@ -13,18 +15,46 @@ import { DIAS, MESES, fechaISO, sumarDias, parseLocal } from '../panel/fecha.uti
     <div class="reserva-wrap">
       <div class="reserva-top">
         <div class="negocio">Salón</div>
-        <div class="sub">Reservá tu turno online</div>
+        <div class="sub">{{ modoConsulta() ? 'Cita de asesoramiento' : 'Reservá tu turno online' }}</div>
       </div>
 
-      <div class="pasos">
-        @for (n of [1,2,3,4]; track n) {
-          <div class="paso-punto" [class.activo]="paso() === n" [class.hecho]="paso() > n"></div>
-        }
-      </div>
+      @if (!modoConsulta()) {
+        <div class="pasos">
+          @for (n of [1,2,3,4]; track n) {
+            <div class="paso-punto" [class.activo]="paso() === n" [class.hecho]="paso() > n"></div>
+          }
+        </div>
+      }
 
       <div class="reserva-body">
+        <!-- ===== MODO CONSULTA: Asesoramiento de Tocado ===== -->
+        @if (modoConsulta()) {
+          <button class="btn-volver" (click)="salirConsulta()">‹ Volver</button>
+          <h1 class="reserva-titulo-paso">Cita online con Juli</h1>
+          <p class="reserva-ayuda-paso">15 minutos para asesorarte sobre tu tocado — sin costo.</p>
+
+          <div class="card-info-consulta">
+            <div class="card-info-icon">💬</div>
+            <div>
+              <div class="card-info-titulo">¿No sabés qué tocado hacerte?</div>
+              <div class="card-info-texto">Juli te asesora por videollamada para ayudarte a elegir el tocado ideal para tu evento. También podés consultarla si tenés alguna duda.</div>
+            </div>
+          </div>
+
+          @if (error()) { <div class="alerta alerta-error">{{ error() }}</div> }
+
+          <div class="campo">
+            <label>Tu nombre</label>
+            <input [(ngModel)]="cNombre" placeholder="Nombre y apellido" />
+          </div>
+          <div class="campo">
+            <label>Teléfono (opcional)</label>
+            <input [(ngModel)]="cTel" type="tel" placeholder="Para coordinar la videollamada" />
+          </div>
+        }
+
         <!-- ===== PASO 1: SERVICIO ===== -->
-        @if (paso() === 1) {
+        @if (!modoConsulta() && paso() === 1) {
           <h1 class="reserva-titulo-paso">¿Qué te querés hacer?</h1>
           <p class="reserva-ayuda-paso">Elegí el servicio.</p>
           @if (cargando()) { <div class="cargando-c">Cargando servicios…</div> }
@@ -41,10 +71,21 @@ import { DIAS, MESES, fechaISO, sumarDias, parseLocal } from '../panel/fecha.uti
               <div class="cargando-c">Todavía no hay servicios disponibles para reservar.</div>
             }
           }
+
+          @if (!cargando()) {
+            <div class="consulta-sep">o si querés un tocado personalizado</div>
+            <div class="opcion opcion-personalizado" (click)="elegirTocadoPersonalizado()">
+              <div class="op-info">
+                <div class="op-nombre">Tocado personalizado</div>
+                <div class="op-detalle">Cita online de 15 min con Juli · Asesoramiento gratuito</div>
+              </div>
+              <div class="op-precio-consulta">Gratis</div>
+            </div>
+          }
         }
 
         <!-- ===== PASO 2: PROFESIONAL ===== -->
-        @if (paso() === 2) {
+        @if (!modoConsulta() && paso() === 2) {
           <button class="btn-volver" (click)="volver()">‹ Volver</button>
           <h1 class="reserva-titulo-paso">¿Con quién?</h1>
           <p class="reserva-ayuda-paso">Elegí profesional o dejá que te asignemos el primero disponible.</p>
@@ -70,18 +111,36 @@ import { DIAS, MESES, fechaISO, sumarDias, parseLocal } from '../panel/fecha.uti
         }
 
         <!-- ===== PASO 3: DÍA Y HORA ===== -->
-        @if (paso() === 3) {
+        @if (!modoConsulta() && paso() === 3) {
           <button class="btn-volver" (click)="volver()">‹ Volver</button>
           <h1 class="reserva-titulo-paso">¿Cuándo?</h1>
           <p class="reserva-ayuda-paso">Elegí el día y el horario que más te sirva.</p>
 
-          <div class="dias-scroll">
-            @for (d of proximosDias(); track d.iso) {
-              <div class="dia-chip" [class.sel]="fechaSel() === d.iso" (click)="elegirFecha(d.iso)">
-                <div class="dia-nom">{{ d.diaNom }}</div>
-                <div class="dia-num">{{ d.num }}</div>
-                <div class="dia-mes">{{ d.mes }}</div>
-              </div>
+          <div class="cal-mes-header">
+            <button class="flecha" (click)="mesAnterior()" [disabled]="esMesActual()">‹</button>
+            <span class="cal-mes-titulo">{{ mesNombre() }} {{ anioVista() }}</span>
+            <button class="flecha" (click)="mesSiguiente()">›</button>
+          </div>
+
+          <div class="cal-mes-semana">
+            @for (n of ['Lu','Ma','Mi','Ju','Vi','Sa','Do']; track n) {
+              <div class="cal-mes-dia-nom">{{ n }}</div>
+            }
+          </div>
+
+          <div class="cal-mes-grid">
+            @for (d of diasCalendario(); track d.key) {
+              @if (d.vacio) {
+                <div></div>
+              } @else {
+                <div class="cal-mes-celda"
+                     [class.hoy]="d.iso === hoyISO"
+                     [class.sel]="fechaSel() === d.iso"
+                     [class.pasado]="d.pasado"
+                     (click)="d.pasado ? null : elegirFecha(d.iso)">
+                  {{ d.num }}
+                </div>
+              }
             }
           </div>
 
@@ -101,7 +160,7 @@ import { DIAS, MESES, fechaISO, sumarDias, parseLocal } from '../panel/fecha.uti
         }
 
         <!-- ===== PASO 4: DATOS Y CONFIRMAR ===== -->
-        @if (paso() === 4) {
+        @if (!modoConsulta() && paso() === 4) {
           <button class="btn-volver" (click)="volver()">‹ Volver</button>
           <h1 class="reserva-titulo-paso">Tus datos</h1>
           <p class="reserva-ayuda-paso">Para confirmar y avisarte del turno.</p>
@@ -139,7 +198,9 @@ import { DIAS, MESES, fechaISO, sumarDias, parseLocal } from '../panel/fecha.uti
 
       <!-- FOOTER con botón de avanzar -->
       <div class="reserva-footer">
-        @if (paso() === 1) {
+        @if (modoConsulta()) {
+          <button class="btn btn-whatsapp" (click)="abrirWhatsApp()">Consultar por WhatsApp</button>
+        } @else if (paso() === 1) {
           <button class="btn btn-primary" [disabled]="!servSel()" (click)="siguiente()">Continuar</button>
         } @else if (paso() === 2) {
           <button class="btn btn-primary" [disabled]="!profSel()" (click)="siguiente()">Continuar</button>
@@ -156,6 +217,7 @@ import { DIAS, MESES, fechaISO, sumarDias, parseLocal } from '../panel/fecha.uti
 })
 export class ReservaComponent implements OnInit {
   paso = signal(1);
+  modoConsulta = signal(false);
   cargando = signal(false);
   cargandoSlots = signal(false);
   reservando = signal(false);
@@ -184,19 +246,48 @@ export class ReservaComponent implements OnInit {
     });
   }
 
-  // --- Días próximos (14 días para el scroll) ---
-  proximosDias = computed(() => {
-    const hoy = new Date();
-    return Array.from({ length: 14 }, (_, i) => {
-      const d = sumarDias(hoy, i);
-      return {
-        iso: fechaISO(d),
-        diaNom: DIAS[d.getDay()],
-        num: d.getDate(),
-        mes: MESES[d.getMonth()].slice(0, 3),
-      };
-    });
+  // --- Calendario mensual ---
+  private _hoy = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  hoyISO = fechaISO(this._hoy);
+
+  mesVista = signal({ year: this._hoy.getFullYear(), month: this._hoy.getMonth() });
+
+  mesNombre = computed(() => MESES[this.mesVista().month]);
+  anioVista = computed(() => this.mesVista().year);
+
+  esMesActual = computed(() => {
+    const { year, month } = this.mesVista();
+    return year === this._hoy.getFullYear() && month === this._hoy.getMonth();
   });
+
+  diasCalendario = computed(() => {
+    const { year, month } = this.mesVista();
+    const primerDia = new Date(year, month, 1);
+    const diasEnMes = new Date(year, month + 1, 0).getDate();
+    let primerDow = primerDia.getDay();
+    primerDow = primerDow === 0 ? 6 : primerDow - 1; // lunes = 0
+
+    const celdas: Array<{ key: string; vacio: boolean; iso: string; num: number; pasado: boolean }> = [];
+    for (let i = 0; i < primerDow; i++) {
+      celdas.push({ key: `e${i}`, vacio: true, iso: '', num: 0, pasado: false });
+    }
+    for (let d = 1; d <= diasEnMes; d++) {
+      const fecha = new Date(year, month, d);
+      fecha.setHours(0, 0, 0, 0);
+      const iso = fechaISO(fecha);
+      celdas.push({ key: iso, vacio: false, iso, num: d, pasado: fecha < this._hoy });
+    }
+    return celdas;
+  });
+
+  mesAnterior() {
+    const { year, month } = this.mesVista();
+    this.mesVista.set(month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 });
+  }
+  mesSiguiente() {
+    const { year, month } = this.mesVista();
+    this.mesVista.set(month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 });
+  }
 
   inicial(nombre: string) { return nombre.trim().charAt(0).toUpperCase(); }
 
@@ -255,6 +346,32 @@ export class ReservaComponent implements OnInit {
   }
   textoBotonFinal() {
     return (this.servSel()?.sena_monto || 0) > 0 ? 'Reservar y pagar seña' : 'Confirmar turno';
+  }
+
+  // --- Tocado personalizado ---
+  elegirTocadoPersonalizado() {
+    this.modoConsulta.set(true);
+    this.cNombre = '';
+    this.cTel = '';
+    this.error.set('');
+  }
+
+  salirConsulta() {
+    this.modoConsulta.set(false);
+    this.error.set('');
+  }
+
+  abrirWhatsApp() {
+    this.error.set('');
+    if (!this.cNombre.trim()) { this.error.set('Ingresá tu nombre para continuar.'); return; }
+    const partes = [
+      `Hola Juli! Te escribo desde Studio Belle.`,
+      `Me gustaría tener una cita online de 15 min para asesorarme sobre un tocado personalizado.`,
+      ``,
+      `Nombre: ${this.cNombre.trim()}`,
+    ];
+    if (this.cTel.trim()) partes.push(`Teléfono: ${this.cTel.trim()}`);
+    window.open(`https://wa.me/${WA_JULI}?text=${encodeURIComponent(partes.join('\n'))}`, '_blank');
   }
 
   // --- Confirmar reserva ---
