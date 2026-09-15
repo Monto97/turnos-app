@@ -1,9 +1,5 @@
 -- ============================================================
---  DATOS DE DEMO - Studio Belle
--- ============================================================
---  Datos de ejemplo para el portfolio. Se carga automáticamente
---  cuando la base está vacía (via scripts/migrate.js).
---  Las cuentas de usuario se crean en el mismo script (requieren bcrypt).
+--  DATOS DE DEMO - Studio Belle (PostgreSQL)
 -- ============================================================
 
 -- Profesionales
@@ -26,16 +22,17 @@ SELECT p.id, s.id FROM profesionales p CROSS JOIN servicios s;
 
 -- Horarios laborales: Lunes a Viernes 9-18, Sábado 9-14
 INSERT INTO horarios_laborales (profesional_id, dia_semana, hora_inicio, hora_fin)
-SELECT p.id, d.dia, h.inicio, h.fin
+SELECT p.id, d.dia, d.inicio::time, d.fin::time
 FROM profesionales p
 CROSS JOIN (
-  SELECT 1 AS dia, '09:00:00' AS inicio, '18:00:00' AS fin UNION ALL
-  SELECT 2, '09:00:00', '18:00:00' UNION ALL
-  SELECT 3, '09:00:00', '18:00:00' UNION ALL
-  SELECT 4, '09:00:00', '18:00:00' UNION ALL
-  SELECT 5, '09:00:00', '18:00:00' UNION ALL
-  SELECT 6, '09:00:00', '14:00:00'
-) d;
+  VALUES
+    (1, '09:00', '18:00'),
+    (2, '09:00', '18:00'),
+    (3, '09:00', '18:00'),
+    (4, '09:00', '18:00'),
+    (5, '09:00', '18:00'),
+    (6, '09:00', '14:00')
+) AS d(dia, inicio, fin);
 
 -- Clientes de demo
 INSERT INTO clientes (nombre, telefono, email) VALUES
@@ -47,54 +44,22 @@ INSERT INTO clientes (nombre, telefono, email) VALUES
 ('Lucas Romero',     '+54 11 5555-0006', 'lucas@email.com'),
 ('Camila Núñez',     '+54 11 5555-0007', 'camila@email.com');
 
--- Turnos pasados (para ver historial en la agenda)
+-- Turnos pasados (historial en la agenda)
 INSERT INTO turnos (cliente_id, profesional_id, servicio_id, inicio, fin, estado, sena_requerida, sena_pagada, precio_snapshot, origen)
 VALUES
--- Semana pasada
-(1, 1, 1, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -7 DAY), '%Y-%m-%d 09:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -7 DAY), '%Y-%m-%d 09:45:00'),
-         'completado', 0, FALSE, 3500, 'online'),
-(2, 2, 2, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -6 DAY), '%Y-%m-%d 10:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -6 DAY), '%Y-%m-%d 12:00:00'),
-         'completado', 3000, TRUE, 12000, 'online'),
-(3, 3, 3, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -5 DAY), '%Y-%m-%d 11:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -5 DAY), '%Y-%m-%d 11:30:00'),
-         'completado', 0, FALSE, 2500, 'interno'),
-(4, 1, 4, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -4 DAY), '%Y-%m-%d 14:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -4 DAY), '%Y-%m-%d 14:40:00'),
-         'completado', 0, FALSE, 2000, 'interno'),
-(5, 2, 5, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -3 DAY), '%Y-%m-%d 15:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -3 DAY), '%Y-%m-%d 16:00:00'),
-         'ausente', 1500, TRUE, 5500, 'online'),
-(6, 3, 1, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -2 DAY), '%Y-%m-%d 09:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL -2 DAY), '%Y-%m-%d 09:45:00'),
-         'cancelado', 0, FALSE, 3500, 'online'),
-
--- Esta semana / próximos días
-(1, 1, 1, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d 09:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d 09:45:00'),
-         'confirmado', 0, FALSE, 3500, 'online'),
-(2, 2, 2, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d 10:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d 12:00:00'),
-         'pendiente', 3000, FALSE, 12000, 'online'),
-(3, 3, 4, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '%Y-%m-%d 10:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '%Y-%m-%d 10:40:00'),
-         'confirmado', 0, FALSE, 2000, 'interno'),
-(4, 1, 5, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '%Y-%m-%d 11:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '%Y-%m-%d 12:00:00'),
-         'pendiente', 1500, FALSE, 5500, 'online'),
-(5, 2, 3, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 3 DAY), '%Y-%m-%d 09:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 3 DAY), '%Y-%m-%d 09:30:00'),
-         'confirmado', 0, FALSE, 2500, 'interno'),
-(6, 3, 1, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 3 DAY), '%Y-%m-%d 10:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 3 DAY), '%Y-%m-%d 10:45:00'),
-         'confirmado', 0, FALSE, 3500, 'online'),
-(7, 1, 2, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '%Y-%m-%d 09:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '%Y-%m-%d 11:00:00'),
-         'pendiente', 3000, TRUE, 12000, 'online'),
-(1, 2, 4, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 5 DAY), '%Y-%m-%d 14:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 5 DAY), '%Y-%m-%d 14:40:00'),
-         'confirmado', 0, FALSE, 2000, 'interno'),
-(2, 3, 5, DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 7 DAY), '%Y-%m-%d 10:00:00'),
-         DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 7 DAY), '%Y-%m-%d 11:00:00'),
-         'pendiente', 1500, FALSE, 5500, 'online');
+(1, 1, 1, (CURRENT_DATE - 7) + '09:00'::time, (CURRENT_DATE - 7) + '09:45'::time, 'completado', 0, FALSE, 3500, 'online'),
+(2, 2, 2, (CURRENT_DATE - 6) + '10:00'::time, (CURRENT_DATE - 6) + '12:00'::time, 'completado', 3000, TRUE,  12000, 'online'),
+(3, 3, 3, (CURRENT_DATE - 5) + '11:00'::time, (CURRENT_DATE - 5) + '11:30'::time, 'completado', 0, FALSE, 2500, 'interno'),
+(4, 1, 4, (CURRENT_DATE - 4) + '14:00'::time, (CURRENT_DATE - 4) + '14:40'::time, 'completado', 0, FALSE, 2000, 'interno'),
+(5, 2, 5, (CURRENT_DATE - 3) + '15:00'::time, (CURRENT_DATE - 3) + '16:00'::time, 'ausente',    1500, TRUE,  5500, 'online'),
+(6, 3, 1, (CURRENT_DATE - 2) + '09:00'::time, (CURRENT_DATE - 2) + '09:45'::time, 'cancelado',  0, FALSE, 3500, 'online'),
+-- Próximos días
+(1, 1, 1, (CURRENT_DATE + 1) + '09:00'::time, (CURRENT_DATE + 1) + '09:45'::time, 'confirmado', 0, FALSE, 3500, 'online'),
+(2, 2, 2, (CURRENT_DATE + 1) + '10:00'::time, (CURRENT_DATE + 1) + '12:00'::time, 'pendiente',  3000, FALSE, 12000, 'online'),
+(3, 3, 4, (CURRENT_DATE + 2) + '10:00'::time, (CURRENT_DATE + 2) + '10:40'::time, 'confirmado', 0, FALSE, 2000, 'interno'),
+(4, 1, 5, (CURRENT_DATE + 2) + '11:00'::time, (CURRENT_DATE + 2) + '12:00'::time, 'pendiente',  1500, FALSE, 5500, 'online'),
+(5, 2, 3, (CURRENT_DATE + 3) + '09:00'::time, (CURRENT_DATE + 3) + '09:30'::time, 'confirmado', 0, FALSE, 2500, 'interno'),
+(6, 3, 1, (CURRENT_DATE + 3) + '10:00'::time, (CURRENT_DATE + 3) + '10:45'::time, 'confirmado', 0, FALSE, 3500, 'online'),
+(7, 1, 2, (CURRENT_DATE + 4) + '09:00'::time, (CURRENT_DATE + 4) + '11:00'::time, 'pendiente',  3000, TRUE,  12000, 'online'),
+(1, 2, 4, (CURRENT_DATE + 5) + '14:00'::time, (CURRENT_DATE + 5) + '14:40'::time, 'confirmado', 0, FALSE, 2000, 'interno'),
+(2, 3, 5, (CURRENT_DATE + 7) + '10:00'::time, (CURRENT_DATE + 7) + '11:00'::time, 'pendiente',  1500, FALSE, 5500, 'online');

@@ -1,5 +1,6 @@
 export const environment = {
   production: true,
-  // URL relativa: el frontend es servido por el mismo Express que la API.
-  apiUrl: '/api',
+  // Reemplazar con el URL real del backend una vez deployado en Vercel.
+  // Ej: https://turnos-ju-api.vercel.app/api
+  apiUrl: 'https://turnos-app-drab.vercel.app/api',
 };

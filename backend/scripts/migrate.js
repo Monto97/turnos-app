@@ -1,13 +1,14 @@
 /**
- * Script de inicialización de base de datos.
+ * Inicialización de base de datos PostgreSQL.
  * - Aplica el schema (CREATE TABLE IF NOT EXISTS, idempotente).
  * - Si la DB está vacía, carga los datos de demo.
  * - Crea los usuarios de demo con contraseñas hasheadas con bcrypt.
  *
- * Se ejecuta antes del arranque del servidor (ver start.sh).
+ * Ejecutar una vez antes del primer deploy:
+ *   DATABASE_URL=<neon-url> node scripts/migrate.js
  */
 
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -17,79 +18,61 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function getDbConfig() {
-  return {
-    // Soporta tanto las variables propias (DB_HOST) como las de Railway (MYSQLHOST).
-    host:     process.env.DB_HOST     || process.env.MYSQLHOST     || 'localhost',
-    port:     Number(process.env.DB_PORT     || process.env.MYSQLPORT)     || 3306,
-    user:     process.env.DB_USER     || process.env.MYSQLUSER     || 'turnos_user',
-    password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || 'turnos_pass_dev',
-    database: process.env.DB_NAME     || process.env.MYSQLDATABASE || 'turnos',
-    multipleStatements: true,
-  };
-}
+const { Client } = pg;
 
 async function migrate() {
-  let conn;
+  // Limpiar parámetros que pg no soporta (channel_binding viene en algunas URLs de Neon)
+  const dbUrl = (process.env.DATABASE_URL || '').replace(/[&?]channel_binding=[^&]*/g, '');
+  const client = new Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
   try {
-    conn = await mysql.createConnection(getDbConfig());
-    console.log('✓ Conexión a MySQL OK');
+    await client.connect();
+    console.log('✓ Conexión a PostgreSQL OK');
 
-    // Aplicar schema (idempotente por los IF NOT EXISTS).
-    let schema = readFileSync(join(__dirname, '../schema.sql'), 'utf8');
-    // Eliminar CREATE DATABASE / USE si quedan del entorno de desarrollo local.
-    schema = schema
-      .replace(/CREATE\s+DATABASE[^;]+;/gi, '')
-      .replace(/USE\s+\w+\s*;/gi, '');
-    await conn.query(schema);
+    const schema = readFileSync(join(__dirname, '../schema.sql'), 'utf8');
+    await client.query(schema);
     console.log('✓ Schema aplicado');
 
-    // Verificar si ya hay datos de demo.
-    const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM profesionales');
-    if (n > 0) {
+    const { rows: [{ n }] } = await client.query('SELECT COUNT(*) AS n FROM profesionales');
+    if (Number(n) > 0) {
       console.log('✓ Datos ya existentes, omitiendo seed');
       return;
     }
 
-    // Cargar datos de demo (profesionales, servicios, turnos, etc.).
     const seed = readFileSync(join(__dirname, '../seed.sql'), 'utf8');
-    await conn.query(seed);
+    await client.query(seed);
     console.log('✓ Datos de demo cargados');
 
-    // Crear usuarios de demo (requieren bcrypt, no pueden ir en SQL puro).
     const ROUNDS = 10;
-    const hash = (p) => bcrypt.hash(p, ROUNDS);
+    const duenoHash   = await bcrypt.hash('Demo1234!', ROUNDS);
+    const clienteHash = await bcrypt.hash('Demo1234!', ROUNDS);
 
-    const duenoHash   = await hash('Demo1234!');
-    const clienteHash = await hash('Demo1234!');
-
-    await conn.query(
+    await client.query(
       `INSERT INTO usuarios (nombre, apellido, email, telefono, password_hash, rol) VALUES
-       ('Admin', 'Demo', 'admin@studiobelle.com', '+54 11 9999-0000', ?, 'dueno'),
-       ('Cliente', 'Demo', 'cliente@studiobelle.com', '+54 11 9999-0001', ?, 'cliente')`,
-      [duenoHash, clienteHash]
+       ($1, $2, $3, $4, $5, $6),
+       ($7, $8, $9, $10, $11, $12)`,
+      [
+        'Admin',   'Demo', 'admin@studiobelle.com',   '+54 11 9999-0000', duenoHash,   'dueno',
+        'Cliente', 'Demo', 'cliente@studiobelle.com', '+54 11 9999-0001', clienteHash, 'cliente',
+      ]
     );
 
-    // Vincular el usuario cliente con su registro en clientes
-    // (así puede ver sus turnos desde el panel de cliente).
-    const [[clienteUser]] = await conn.query(
+    const { rows: [clienteUser] } = await client.query(
       "SELECT id FROM usuarios WHERE email = 'cliente@studiobelle.com'"
     );
-    await conn.query(
-      'UPDATE clientes SET usuario_id = ? WHERE email = ?',
+    await client.query(
+      'UPDATE clientes SET usuario_id = $1 WHERE email = $2',
       [clienteUser.id, 'laura@email.com']
     );
 
     console.log('✓ Usuarios de demo creados:');
-    console.log('  admin@studiobelle.com  / Demo1234!  (dueño - acceso al panel)');
+    console.log('  admin@studiobelle.com   / Demo1234!  (dueño - acceso al panel)');
     console.log('  cliente@studiobelle.com / Demo1234!  (cliente - ve sus turnos)');
 
   } catch (err) {
     console.error('✗ Error en migración:', err.message);
     process.exit(1);
   } finally {
-    if (conn) await conn.end();
+    await client.end();
   }
 }
 

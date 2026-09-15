@@ -2,43 +2,26 @@ import { pool } from '../config/db.js';
 import { calcularSlotsLibres } from './disponibilidad.service.js';
 import { enviarNotificacionReserva } from './email.service.js';
 
-// ============================================================
-//  RESERVA PÚBLICA (lado del cliente, sin login)
-// ============================================================
-
-/**
- * Devuelve los profesionales que ofrecen un servicio dado.
- * Si ninguno tiene el servicio asignado explícitamente, devolvemos
- * todos los activos (peluquería chica donde todos hacen de todo).
- */
 export async function profesionalesDeServicio(servicioId) {
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT p.id, p.nombre, p.color_agenda
        FROM profesionales p
        JOIN profesional_servicio ps ON ps.profesional_id = p.id
-      WHERE ps.servicio_id = ? AND p.activo = TRUE
+      WHERE ps.servicio_id = $1 AND p.activo = TRUE
       ORDER BY p.nombre`,
     [servicioId]
   );
   if (rows.length > 0) return rows;
 
-  const [todos] = await pool.query(
+  const { rows: todos } = await pool.query(
     'SELECT id, nombre, color_agenda FROM profesionales WHERE activo = TRUE ORDER BY nombre'
   );
   return todos;
 }
 
-/**
- * Disponibilidad "cualquiera disponible": junta los slots libres de
- * TODOS los profesionales que hacen el servicio, y para cada horario
- * recuerda qué profesionales lo tienen libre. Así, cuando el cliente
- * elige un horario, asignamos un profesional automáticamente.
- *
- * Devuelve: [{ hora: '09:00', profesionales: [1,3] }, ...]
- */
 export async function disponibilidadCualquiera(servicioId, fecha) {
   const profs = await profesionalesDeServicio(servicioId);
-  const mapa = new Map(); // hora -> Set(profesionalId)
+  const mapa = new Map();
 
   for (const p of profs) {
     const slots = await calcularSlotsLibres(p.id, servicioId, fecha);
@@ -53,13 +36,6 @@ export async function disponibilidadCualquiera(servicioId, fecha) {
     .sort((a, b) => a.hora.localeCompare(b.hora));
 }
 
-/**
- * Crea la reserva desde el lado público. A diferencia del alta interna:
- *  - Crea o reutiliza el cliente por teléfono/email.
- *  - Si no viene profesionalId (caso "cualquiera"), elige uno libre.
- *  - Marca origen='online'.
- *  - Deja el turno en 'pendiente' (se confirma al pagar la seña, o a mano).
- */
 export async function reservaPublica({
   servicioId, profesionalId = null, fecha, hora, cliente, usuarioId = null,
 }) {
@@ -67,19 +43,17 @@ export async function reservaPublica({
     throw new Error('Faltan datos para la reserva');
   }
 
-  const conn = await pool.getConnection();
+  const client = await pool.connect();
   try {
-    await conn.beginTransaction();
+    await client.query('BEGIN');
 
-    // Datos del servicio (duración, precio, seña).
-    const [servicios] = await conn.query(
-      'SELECT nombre, duracion_min, precio, sena_monto FROM servicios WHERE id = ? AND activo = TRUE',
+    const { rows: servicios } = await client.query(
+      'SELECT nombre, duracion_min, precio, sena_monto FROM servicios WHERE id = $1 AND activo = TRUE',
       [servicioId]
     );
     if (servicios.length === 0) throw new Error('Servicio no encontrado o inactivo');
     const serv = servicios[0];
 
-    // Si no eligió profesional, buscamos uno con ese horario libre.
     let profFinal = profesionalId;
     if (!profFinal) {
       const disp = await disponibilidadCualquiera(servicioId, fecha);
@@ -87,58 +61,51 @@ export async function reservaPublica({
       if (!slot || slot.profesionales.length === 0) {
         throw new Error('Ese horario ya no está disponible');
       }
-      profFinal = slot.profesionales[0]; // el primero libre
+      profFinal = slot.profesionales[0];
     }
 
-    // Revalidar que el profesional elegido tenga ese slot libre.
     const libres = await calcularSlotsLibres(profFinal, servicioId, fecha);
     if (!libres.includes(hora)) {
       throw new Error('Ese horario ya no está disponible');
     }
 
-    // Traemos el nombre del profesional para la notificación.
-    const [[profRow]] = await conn.query('SELECT nombre FROM profesionales WHERE id = ?', [profFinal]);
+    const { rows: [profRow] } = await client.query('SELECT nombre FROM profesionales WHERE id = $1', [profFinal]);
     const nombreProfesional = profRow?.nombre || '';
 
-    // Crear o reutilizar cliente.
-    // Prioridad de identificación:
-    //  1. Si hay usuario logueado, buscamos SU registro de cliente (usuario_id).
-    //  2. Si no, por teléfono, y si no, por email.
     let clienteId;
     const tel = cliente.telefono?.trim() || null;
     const email = cliente.email?.trim().toLowerCase() || null;
     let existente = [];
 
     if (usuarioId) {
-      [existente] = await conn.query(
-        'SELECT id FROM clientes WHERE usuario_id = ? LIMIT 1', [usuarioId]
-      );
+      const { rows } = await client.query('SELECT id FROM clientes WHERE usuario_id = $1 LIMIT 1', [usuarioId]);
+      existente = rows;
     }
     if (existente.length === 0 && tel) {
-      [existente] = await conn.query('SELECT id FROM clientes WHERE telefono = ? LIMIT 1', [tel]);
+      const { rows } = await client.query('SELECT id FROM clientes WHERE telefono = $1 LIMIT 1', [tel]);
+      existente = rows;
     }
     if (existente.length === 0 && email) {
-      [existente] = await conn.query('SELECT id FROM clientes WHERE email = ? LIMIT 1', [email]);
+      const { rows } = await client.query('SELECT id FROM clientes WHERE email = $1 LIMIT 1', [email]);
+      existente = rows;
     }
 
     if (existente.length > 0) {
       clienteId = existente[0].id;
-      // Si el cliente existe pero no estaba vinculado y ahora hay usuario, lo vinculamos.
       if (usuarioId) {
-        await conn.query(
-          'UPDATE clientes SET usuario_id = ? WHERE id = ? AND usuario_id IS NULL',
+        await client.query(
+          'UPDATE clientes SET usuario_id = $1 WHERE id = $2 AND usuario_id IS NULL',
           [usuarioId, clienteId]
         );
       }
     } else {
-      const [r] = await conn.query(
-        'INSERT INTO clientes (nombre, telefono, email, usuario_id) VALUES (?, ?, ?, ?)',
+      const { rows: [nuevo] } = await client.query(
+        'INSERT INTO clientes (nombre, telefono, email, usuario_id) VALUES ($1, $2, $3, $4) RETURNING id',
         [cliente.nombre.trim(), tel, email, usuarioId]
       );
-      clienteId = r.insertId;
+      clienteId = nuevo.id;
     }
 
-    // Calcular fin.
     const [Y, M, D] = fecha.split('-').map(Number);
     const [hh, mm] = hora.split(':').map(Number);
     const dFin = new Date(Y, M - 1, D, hh, mm + serv.duracion_min);
@@ -146,17 +113,17 @@ export async function reservaPublica({
     const inicio = `${fecha} ${hora}:00`;
     const fin = `${dFin.getFullYear()}-${p(dFin.getMonth() + 1)}-${p(dFin.getDate())} ${p(dFin.getHours())}:${p(dFin.getMinutes())}:00`;
 
-    const [result] = await conn.query(
+    const { rows: [result] } = await client.query(
       `INSERT INTO turnos
         (cliente_id, profesional_id, servicio_id, inicio, fin, estado,
          sena_requerida, sena_pagada, precio_snapshot, origen)
-       VALUES (?, ?, ?, ?, ?, 'pendiente', ?, FALSE, ?, 'online')`,
+       VALUES ($1, $2, $3, $4, $5, 'pendiente', $6, FALSE, $7, 'online')
+       RETURNING id`,
       [clienteId, profFinal, servicioId, inicio, fin, serv.sena_monto, serv.precio]
     );
 
-    await conn.commit();
+    await client.query('COMMIT');
 
-    // Notificación al dueño: fire-and-forget (no bloqueamos ni fallamos la reserva si el mail falla).
     enviarNotificacionReserva({
       servicio: serv.nombre,
       profesional: nombreProfesional,
@@ -165,25 +132,24 @@ export async function reservaPublica({
     }).catch((e) => console.error('[email] Notificación de reserva falló:', e.message));
 
     return {
-      turnoId: result.insertId,
+      turnoId: result.id,
       inicio, fin,
       servicio: serv.nombre,
       precio: serv.precio,
       sena: serv.sena_monto,
       profesionalId: profFinal,
-      requierePago: serv.sena_monto > 0,
+      requierePago: Number(serv.sena_monto) > 0,
     };
   } catch (err) {
-    await conn.rollback();
+    await client.query('ROLLBACK');
     throw err;
   } finally {
-    conn.release();
+    client.release();
   }
 }
 
-/** Datos públicos de un turno (para la pantalla de confirmación). */
 export async function turnoPublico(turnoId) {
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT t.id, t.inicio, t.fin, t.estado, t.sena_requerida, t.sena_pagada,
             t.precio_snapshot, s.nombre AS servicio, p.nombre AS profesional,
             c.nombre AS cliente
@@ -191,44 +157,36 @@ export async function turnoPublico(turnoId) {
        JOIN servicios s ON s.id = t.servicio_id
        JOIN profesionales p ON p.id = t.profesional_id
        JOIN clientes c ON c.id = t.cliente_id
-      WHERE t.id = ?`,
+      WHERE t.id = $1`,
     [turnoId]
   );
   if (rows.length === 0) throw new Error('Turno no encontrado');
   return rows[0];
 }
 
-/**
- * Turnos de un usuario cliente (su historial). Busca todos los registros
- * de cliente vinculados a su cuenta y trae sus turnos.
- */
 export async function misTurnos(usuarioId) {
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT t.id, t.inicio, t.fin, t.estado, t.sena_requerida, t.sena_pagada,
             t.precio_snapshot, s.nombre AS servicio, p.nombre AS profesional
        FROM turnos t
        JOIN clientes c ON c.id = t.cliente_id
        JOIN servicios s ON s.id = t.servicio_id
        JOIN profesionales p ON p.id = t.profesional_id
-      WHERE c.usuario_id = ?
+      WHERE c.usuario_id = $1
       ORDER BY t.inicio DESC`,
     [usuarioId]
   );
   return rows;
 }
 
-/**
- * Cancela un turno, pero solo si pertenece al usuario que lo pide.
- * Verifica la propiedad antes de cancelar (autorización a nivel de dato).
- */
 export async function cancelarMiTurno(usuarioId, turnoId) {
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT t.id FROM turnos t
        JOIN clientes c ON c.id = t.cliente_id
-      WHERE t.id = ? AND c.usuario_id = ?`,
+      WHERE t.id = $1 AND c.usuario_id = $2`,
     [turnoId, usuarioId]
   );
   if (rows.length === 0) throw new Error('Turno no encontrado o no te pertenece');
-  await pool.query(`UPDATE turnos SET estado = 'cancelado' WHERE id = ?`, [turnoId]);
+  await pool.query(`UPDATE turnos SET estado = 'cancelado' WHERE id = $1`, [turnoId]);
   return { turnoId, estado: 'cancelado' };
 }
